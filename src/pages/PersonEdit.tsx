@@ -156,15 +156,27 @@ export default function PersonEdit() {
           }
         }
       } else if (hasParents) {
-        const fam: Family = {
-          id: newId(),
-          husbandId: form.fatherId,
-          wifeId: form.motherId,
-          childIds: [personId],
-          createdAt: ts,
-          updatedAt: ts,
+        const existing = (await db.families.toArray()).find(
+          f => f.husbandId === form.fatherId && f.wifeId === form.motherId,
+        )
+        if (existing) {
+          if (!existing.childIds.includes(personId)) {
+            await db.families.update(existing.id, {
+              childIds: [...existing.childIds, personId],
+              updatedAt: ts,
+            })
+          }
+        } else {
+          const fam: Family = {
+            id: newId(),
+            husbandId: form.fatherId,
+            wifeId: form.motherId,
+            childIds: [personId],
+            createdAt: ts,
+            updatedAt: ts,
+          }
+          await db.families.add(fam)
         }
-        await db.families.add(fam)
       }
 
       const existingSpouseFamilies = await getSpouseFamilies(personId)
@@ -194,16 +206,28 @@ export default function PersonEdit() {
         const husb = isFemale ? m.spouseId : personId
         const wife = isFemale ? personId : m.spouseId
         if (m.isNew) {
-          const fam: Family = {
-            id: newId(),
-            husbandId: husb,
-            wifeId: wife,
-            marriage: m.marriage,
-            childIds: m.childIds,
-            createdAt: ts,
-            updatedAt: ts,
+          const existing = (await db.families.toArray()).find(
+            f => f.husbandId === husb && f.wifeId === wife,
+          )
+          if (existing) {
+            const mergedChildren = [...new Set([...existing.childIds, ...m.childIds])]
+            await db.families.update(existing.id, {
+              marriage: m.marriage ?? existing.marriage,
+              childIds: mergedChildren,
+              updatedAt: ts,
+            })
+          } else {
+            const fam: Family = {
+              id: newId(),
+              husbandId: husb,
+              wifeId: wife,
+              marriage: m.marriage,
+              childIds: m.childIds,
+              createdAt: ts,
+              updatedAt: ts,
+            }
+            await db.families.add(fam)
           }
-          await db.families.add(fam)
         } else {
           await db.families.update(m.familyId, {
             husbandId: husb,
